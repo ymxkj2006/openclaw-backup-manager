@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+    <title>OpenClaw 配置备份恢复系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0f1419;
+            color: #e5e7eb;
+            min-height: 100vh;
+        }
+        .container { max-width: 900px; margin: 0 auto; padding: 20px; }
+
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            background: linear-gradient(135deg, #1a1f26 0%, #232a36 100%);
+            border-radius: 12px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+        .header-left { display: flex; align-items: center; gap: 14px; }
+        .logo-icon {
+            width: 44px; height: 44px;
+            background: linear-gradient(135deg, #3b82f6, #60a5fa);
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px;
+        }
+        .header-title { font-size: 18px; font-weight: 600; color: #fff; }
+        .header-subtitle { font-size: 12px; color: #9ca3af; margin-top: 2px; }
+        .header-right { display: flex; align-items: center; gap: 12px; }
+
+        /* Status Badge */
+        .status-badge {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .status-badge.ready { background: rgba(34, 197, 94, 0.15); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.3); }
+        .status-badge.warning { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .status-badge.error { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+        /* Cards */
+        .card {
+            background: #1a1f26;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 18px 20px;
+            margin-bottom: 16px;
+        }
+        .card-title {
+            font-size: 13px; font-weight: 600; color: #9ca3af;
+            text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .card-title-icon { font-size: 16px; opacity: 0.7; }
+
+        /* Directory Grid */
+        .dir-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .dir-card {
+            background: #232a36; border-radius: 8px; padding: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .dir-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+        .dir-label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .dir-path { font-size: 13px; color: #d1d5db; font-family: 'Consolas', 'Courier New', monospace; word-break: break-all; line-height: 1.4; }
+        .dir-stats { display: flex; gap: 16px; font-size: 12px; color: #6b7280; margin-top: 10px; }
+        .dir-stat { display: flex; align-items: center; gap: 4px; }
+        .dir-stat-value { color: #9ca3af; font-weight: 500; }
+
+        /* Icon Buttons */
+        .icon-btn {
+            width: 32px; height: 32px;
+            border-radius: 6px; border: none;
+            background: rgba(59, 130, 246, 0.15);
+            color: #3b82f6; cursor: pointer;
+            font-size: 14px;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.15s ease;
+            flex-shrink: 0;
+        }
+        .icon-btn:hover { background: rgba(59, 130, 246, 0.25); }
+        .icon-btn.danger { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+        .icon-btn.danger:hover { background: rgba(239, 68, 68, 0.25); }
+        .icon-btn.success { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+        .icon-btn.success:hover { background: rgba(34, 197, 94, 0.25); }
+
+        /* Mode Grid */
+        .mode-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+        .mode-option {
+            background: #232a36; border: 2px solid transparent;
+            border-radius: 10px; padding: 16px;
+            cursor: pointer; transition: all 0.2s ease; text-align: center;
+        }
+        .mode-option:hover { background: #2a323f; }
+        .mode-option.selected { border-color: #3b82f6; background: rgba(59, 130, 246, 0.1); }
+        .mode-icon { font-size: 28px; margin-bottom: 10px; }
+        .mode-name { font-size: 14px; font-weight: 600; color: #e5e7eb; margin-bottom: 4px; }
+        .mode-desc { font-size: 11px; color: #6b7280; line-height: 1.4; }
+
+        /* File Tree */
+        .file-tree-container {
+            background: #232a36; border-radius: 8px;
+            max-height: 280px; overflow-y: auto;
+            margin-top: 12px;
+            display: none;
+        }
+        .file-tree-container.visible { display: block; }
+        .file-tree { padding: 12px; }
+        .file-tree-item { display: flex; align-items: center; padding: 6px 8px; border-radius: 4px; cursor: pointer; }
+        .file-tree-item:hover { background: rgba(255, 255, 255, 0.05); }
+        .file-tree-checkbox { margin-right: 10px; width: 16px; height: 16px; accent-color: #3b82f6; cursor: pointer; }
+        .file-tree-icon { font-size: 14px; margin-right: 8px; }
+        .file-tree-name { font-size: 13px; color: #d1d5db; }
+        .file-tree-children { padding-left: 20px; }
+        .file-tree-dir > .file-tree-item { font-weight: 500; }
+
+        /* Selected Files Info */
+        .selected-info {
+            font-size: 12px; color: #9ca3af;
+            margin-top: 10px; padding: 10px 12px;
+            background: rgba(59, 130, 246, 0.1);
+            border-radius: 6px;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+        .selected-info.hidden { display: none; }
+
+        /* Actions */
+        .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .btn {
+            padding: 14px 24px; border-radius: 8px; font-size: 14px; font-weight: 600;
+            cursor: pointer; border: none; transition: all 0.2s ease;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: #fff;
+        }
+        .btn-primary:hover { background: linear-gradient(135deg, #60a5fa, #3b82f6); transform: translateY(-1px); }
+        .btn-primary:active { transform: translateY(0); }
+        .btn-launch { background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; }
+        .btn-launch:hover { background: linear-gradient(135deg, #4ade80, #22c55e); transform: translateY(-1px); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+        .btn-icon { font-size: 16px; }
+
+        /* Backup List */
+        .backup-list { max-height: 220px; overflow-y: auto; }
+        .backup-list::-webkit-scrollbar { width: 6px; }
+        .backup-list::-webkit-scrollbar-track { background: #1a1f26; }
+        .backup-list::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 3px; }
+        .backup-item {
+            display: flex; align-items: center; padding: 12px 14px;
+            background: #232a36; border-radius: 8px; margin-bottom: 8px; gap: 12px;
+        }
+        .backup-item:hover { background: #2a323f; }
+        .backup-icon { font-size: 22px; opacity: 0.8; }
+        .backup-info { flex: 1; min-width: 0; }
+        .backup-name { font-size: 13px; font-weight: 500; color: #d1d5db; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .backup-meta { font-size: 11px; color: #6b7280; margin-top: 3px; display: flex; gap: 12px; }
+        .backup-actions { display: flex; gap: 8px; }
+
+        /* API Section */
+        .api-section { display: flex; align-items: center; justify-content: space-between; }
+        .api-info { display: flex; align-items: center; gap: 16px; }
+        .api-status { display: flex; align-items: center; gap: 8px; }
+        .api-status-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .api-status-dot.running { background: #22c55e; box-shadow: 0 0 8px rgba(34, 197, 94, 0.5); }
+        .api-status-dot.stopped { background: #6b7280; }
+        .api-port { font-size: 12px; color: #9ca3af; }
+        .api-controls { display: flex; align-items: center; gap: 10px; }
+
+        /* Toggle Switch */
+        .toggle {
+            position: relative; width: 44px; height: 24px;
+            background: #374151; border-radius: 12px;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .toggle.active { background: #3b82f6; }
+        .toggle::after {
+            content: ''; position: absolute;
+            top: 2px; left: 2px;
+            width: 20px; height: 20px;
+            background: #fff; border-radius: 50%;
+            transition: transform 0.2s;
+        }
+        .toggle.active::after { transform: translateX(20px); }
+
+        /* Input */
+        .input {
+            background: #232a36; border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px; padding: 8px 12px;
+            color: #e5e7eb; font-size: 13px;
+            width: 80px; text-align: center;
+        }
+        .input:focus { outline: none; border-color: #3b82f6; }
+
+        /* Empty State */
+        .empty-state { text-align: center; padding: 30px; color: #6b7280; }
+        .empty-icon { font-size: 36px; margin-bottom: 10px; opacity: 0.5; }
+        .empty-text { font-size: 13px; }
+
+        /* Toast */
+        .toast {
+            position: fixed; bottom: 30px; left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: #1a1f26; color: #e5e7eb;
+            padding: 14px 24px; border-radius: 10px;
+            font-size: 14px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            opacity: 0; transition: all 0.3s ease; z-index: 1000;
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+        .toast.success { border-color: rgba(34, 197, 94, 0.3); }
+        .toast.error { border-color: rgba(239, 68, 68, 0.3); }
+
+        /* Footer */
+        .footer { text-align: center; padding: 16px; color: #4b5563; font-size: 11px; }
+
+        /* Spinner */
+        .spinner {
+            display: inline-block; width: 16px; height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3); border-top-color: #fff;
+            border-radius: 50%; animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Responsive */
+        @media (max-width: 700px) {
+            .dir-grid, .mode-grid, .actions { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <div class="logo-icon">💾</div>
+                <div>
+                    <div class="header-title">OpenClaw 配置备份恢复系统</div>
+                    <div class="header-subtitle">独立运行 · 支持 API</div>
+                </div>
+            </div>
+            <div class="header-right">
+                <div id="statusBadge" class="status-badge warning">检测中...</div>
+            </div>
+        </div>
+
+        <!-- Directory Info -->
+        <div class="card">
+            <div class="card-title"><span class="card-title-icon">📁</span> 目录信息</div>
+            <div class="dir-grid">
+                <div class="dir-card">
+                    <div class="dir-header">
+                        <div>
+                            <div class="dir-label">OpenClaw 配置目录</div>
+                            <div id="openclawDir" class="dir-path">检测中...</div>
+                        </div>
+                        <button class="icon-btn" id="btnOpenOpenclawDir" title="打开文件夹">📂</button>
+                    </div>
+                    <div class="dir-stats">
+                        <div class="dir-stat"><span>📂</span> <span class="dir-stat-value" id="fileCount">-</span> 个文件</div>
+                        <div class="dir-stat"><span>💾</span> <span class="dir-stat-value" id="dirSize">-</span></div>
+                    </div>
+                </div>
+                <div class="dir-card">
+                    <div class="dir-header">
+                        <div>
+                            <div class="dir-label">备份存储目录</div>
+                            <div id="backupDir" class="dir-path">加载中...</div>
+                        </div>
+                        <button class="icon-btn" id="btnOpenBackupDir" title="打开文件夹">📂</button>
+                    </div>
+                    <div class="dir-stats">
+                        <div class="dir-stat"><span>📦</span> <span class="dir-stat-value" id="backupCount">-</span> 个备份</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Backup Mode -->
+        <div class="card">
+            <div class="card-title"><span class="card-title-icon">⚙️</span> 备份模式</div>
+            <div class="mode-grid">
+                <div class="mode-option selected" data-mode="full">
+                    <div class="mode-icon">📦</div>
+                    <div class="mode-name">完整备份</div>
+                    <div class="mode-desc">备份整个 .openclaw 目录</div>
+                </div>
+                <div class="mode-option" data-mode="config">
+                    <div class="mode-icon">🔧</div>
+                    <div class="mode-name">仅配置</div>
+                    <div class="mode-desc">仅备份 openclaw.json</div>
+                </div>
+                <div class="mode-option" data-mode="custom">
+                    <div class="mode-icon">🎯</div>
+                    <div class="mode-name">自定义</div>
+                    <div class="mode-desc">手动选择文件/目录</div>
+                </div>
+            </div>
+
+            <!-- File Tree for Custom Mode -->
+            <div class="file-tree-container" id="fileTreeContainer">
+                <div class="file-tree" id="fileTree"></div>
+            </div>
+            <div class="selected-info hidden" id="selectedInfo">已选 <span id="selectedCount">0</span> 个文件/目录</div>
+        </div>
+
+        <!-- Actions -->
+        <div class="card">
+            <div class="actions">
+                <button class="btn btn-primary" id="btnBackup">
+                    <span class="btn-icon">💾</span> 创建备份
+                </button>
+                <button class="btn btn-launch" id="btnLaunch">
+                    <span class="btn-icon">▶️</span> 一键启动 OpenClaw
+                </button>
+            </div>
+        </div>
+
+        <!-- Backup History -->
+        <div class="card">
+            <div class="card-title"><span class="card-title-icon">📜</span> 备份历史</div>
+            <div class="backup-list" id="backupList">
+                <div class="empty-state">
+                    <div class="empty-icon">📭</div>
+                    <div class="empty-text">暂无备份记录</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- API Section -->
+        <div class="card">
+            <div class="card-title"><span class="card-title-icon">🌐</span> REST API 服务</div>
+            <div class="api-section">
+                <div class="api-info">
+                    <div class="api-status">
+                        <div class="api-status-dot stopped" id="apiDot"></div>
+                        <span id="apiStatusText">已停止</span>
+                    </div>
+                    <div class="api-port">端口: <input type="number" class="input" id="apiPort" value="3456" min="1024" max="65535"></div>
+                    <div id="apiUrl" style="font-size: 12px; color: #3b82f6; display: none;"></div>
+                </div>
+                <div class="api-controls">
+                    <div class="toggle" id="apiToggle"></div>
+                    <button class="icon-btn success" id="btnApiRestart" title="重启 API">🔄</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">OpenClaw Backup Manager · 独立应用程序</div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast"></div>
+
+    <script>
+        let selectedMode = 'full';
+        let settings = {};
+        let fileTreeData = [];
+        let selectedFiles = new Set();
+
+        // ========== Init ==========
+        async function init() {
+            await loadSettings();
+            await loadDirectoryInfo();
+            await loadBackupList();
+            await loadApiStatus();
+            setupEventListeners();
+            setupBackupListener();
+        }
+
+        // ========== Settings ==========
+        async function loadSettings() {
+            settings = await window.api.getSettings();
+            document.getElementById('apiPort').value = settings.apiPort || 3456;
+            selectedFiles = new Set(settings.customFiles || []);
+            updateSelectedInfo();
+        }
+
+        async function saveSettings(newSettings) {
+            settings = await window.api.saveSettings(newSettings);
+        }
+
+        // ========== Directory Info ==========
+        async function loadDirectoryInfo() {
+            try {
+                const openclawDir = await window.api.getOpenClawDir();
+                document.getElementById('openclawDir').textContent = openclawDir;
+
+                const exists = await window.api.checkOpenClawExists();
+                const badge = document.getElementById('statusBadge');
+
+                if (exists) {
+                    badge.className = 'status-badge ready';
+                    badge.textContent = '就绪';
+                    document.getElementById('btnBackup').disabled = false;
+
+                    const stats = await window.api.getDirStats(openclawDir);
+                    if (stats) {
+                        document.getElementById('fileCount').textContent = stats.fileCount.toLocaleString();
+                        document.getElementById('dirSize').textContent = formatSize(stats.size);
+                    }
+                } else {
+                    badge.className = 'status-badge error';
+                    badge.textContent = '未找到目录';
+                    document.getElementById('btnBackup').disabled = true;
+                }
+
+                const backupDir = await window.api.getBackupDir();
+                document.getElementById('backupDir').textContent = backupDir;
+
+                const backups = await window.api.listBackups();
+                document.getElementById('backupCount').textContent = backups.length;
+
+            } catch (e) {
+                showToast('加载目录信息失败: ' + e.message, 'error');
+            }
+        }
+
+        // ========== API Status ==========
+        async function loadApiStatus() {
+            const status = await window.api.getApiStatus();
+            updateApiUI(status.running);
+        }
+
+        function updateApiUI(running) {
+            const dot = document.getElementById('apiDot');
+            const text = document.getElementById('apiStatusText');
+            const toggle = document.getElementById('apiToggle');
+            const url = document.getElementById('apiUrl');
+            const port = document.getElementById('apiPort').value;
+
+            if (running) {
+                dot.className = 'api-status-dot running';
+                text.textContent = '运行中';
+                toggle.classList.add('active');
+                url.style.display = 'block';
+                url.textContent = `http://localhost:${port}/api/health`;
+            } else {
+                dot.className = 'api-status-dot stopped';
+                text.textContent = '已停止';
+                toggle.classList.remove('active');
+                url.style.display = 'none';
+            }
+        }
+
+        // ========== File Tree ==========
+        async function loadFileTree() {
+            const openclawDir = await window.api.getOpenClawDir();
+            fileTreeData = await window.api.getFileTree(openclawDir);
+            renderFileTree(fileTreeData);
+        }
+
+        function renderFileTree(nodes, container = null, level = 0) {
+            if (!container) container = document.getElementById('fileTree');
+            container.innerHTML = '';
+
+            nodes.forEach(node => {
+                const item = document.createElement('div');
+                const isDir = node.type === 'dir';
+                const checked = selectedFiles.has(node.path);
+
+                item.innerHTML = `
+                    <div class="file-tree-item" data-path="${node.path}" data-type="${node.type}">
+                        <input type="checkbox" class="file-tree-checkbox" ${checked ? 'checked' : ''}>
+                        <span class="file-tree-icon">${isDir ? '📁' : '📄'}</span>
+                        <span class="file-tree-name">${node.name}</span>
+                    </div>
+                    ${isDir && node.children ? '<div class="file-tree-children"></div>' : ''}
+                `;
+
+                container.appendChild(item);
+
+                // Event listeners
+                const checkbox = item.querySelector('.file-tree-checkbox');
+                checkbox.addEventListener('change', (e) => {
+                    e.stopPropagation();
+                    const childrenContainer = item.querySelector('.file-tree-children');
+                    toggleFileAndChildren(node, e.target.checked, childrenContainer);
+                });
+
+                const itemDiv = item.querySelector('.file-tree-item');
+                itemDiv.addEventListener('click', (e) => {
+                    if (e.target !== checkbox) checkbox.click();
+                });
+
+                if (isDir && node.children) {
+                    const childContainer = item.querySelector('.file-tree-children');
+                    renderFileTree(node.children, childContainer, level + 1);
+                }
+            });
+        }
+
+        function toggleFileAndChildren(node, checked, childrenContainer) {
+            if (checked) {
+                selectedFiles.add(node.path);
+            } else {
+                selectedFiles.delete(node.path);
+            }
+
+            // Also check/uncheck all children visually
+            if (childrenContainer && childrenContainer.children) {
+                const childItems = childrenContainer.querySelectorAll('.file-tree-item');
+                childItems.forEach(childItem => {
+                    const childCheckbox = childItem.querySelector('.file-tree-checkbox');
+                    const childPath = childItem.dataset.path;
+                    const childType = childItem.dataset.type;
+
+                    if (checked) {
+                        selectedFiles.add(childPath);
+                        childCheckbox.checked = true;
+                    } else {
+                        selectedFiles.delete(childPath);
+                        childCheckbox.checked = false;
+                    }
+
+                    // Recursively handle nested children
+                    const parentDiv = childItem.closest('div[id^="tree-"]') || childItem.parentElement.parentElement;
+                    const nextChildrenContainer = childItem.nextElementSibling;
+                    if (nextChildrenContainer && nextChildrenContainer.classList.contains('file-tree-children')) {
+                        toggleChildrenContainer(nextChildrenContainer, checked);
+                    }
+                });
+            }
+
+            updateSelectedInfo();
+        }
+
+        function toggleChildrenContainer(container, checked) {
+            if (!container) return;
+            const items = container.querySelectorAll('.file-tree-item');
+            items.forEach(item => {
+                const checkbox = item.querySelector('.file-tree-checkbox');
+                const path = item.dataset.path;
+
+                if (checked) {
+                    selectedFiles.add(path);
+                    checkbox.checked = true;
+                } else {
+                    selectedFiles.delete(path);
+                    checkbox.checked = false;
+                }
+
+                // Check for nested children
+                const nextSibling = item.parentElement.nextElementSibling;
+                if (nextSibling && nextSibling.classList.contains('file-tree-children')) {
+                    toggleChildrenContainer(nextSibling, checked);
+                }
+            });
+        }
+
+        function updateSelectedInfo() {
+            const info = document.getElementById('selectedInfo');
+            const count = document.getElementById('selectedCount');
+            count.textContent = selectedFiles.size;
+            if (selectedMode === 'custom') {
+                info.classList.remove('hidden');
+            }
+        }
+
+        // ========== Backup List ==========
+        async function loadBackupList() {
+            const list = document.getElementById('backupList');
+            try {
+                const backups = await window.api.listBackups();
+                document.getElementById('backupCount').textContent = backups.length;
+
+                if (backups.length === 0) {
+                    list.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-icon">📭</div>
+                            <div class="empty-text">暂无备份记录</div>
+                        </div>
+                    `;
+                    return;
+                }
+
+                list.innerHTML = backups.map(b => `
+                    <div class="backup-item">
+                        <div class="backup-icon">📦</div>
+                        <div class="backup-info">
+                            <div class="backup-name">${b.name}</div>
+                            <div class="backup-meta">
+                                <span>${formatDate(b.createdAt)}</span>
+                                <span>${formatSize(b.size)}</span>
+                            </div>
+                        </div>
+                        <div class="backup-actions">
+                            <button class="icon-btn" title="打开文件夹" onclick="openBackupFolder('${b.path.replace(/\\/g, '\\\\')}')">📂</button>
+                            <button class="icon-btn" title="恢复" onclick="restoreBackup('${b.path.replace(/\\/g, '\\\\')}')">↩️</button>
+                            <button class="icon-btn danger" title="删除" onclick="deleteBackup('${b.path.replace(/\\/g, '\\\\')}')">🗑️</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                list.innerHTML = '<div class="empty-state"><div class="empty-text">加载失败</div></div>';
+            }
+        }
+
+        function openBackupFolder(backupPath) {
+            window.api.openInExplorer(backupPath);
+        }
+
+        // ========== Event Listeners ==========
+        function setupEventListeners() {
+            // Open folder buttons
+            document.getElementById('btnOpenOpenclawDir').addEventListener('click', async () => {
+                const dir = await window.api.getOpenClawDir();
+                window.api.openInExplorer(dir);
+            });
+            document.getElementById('btnOpenBackupDir').addEventListener('click', async () => {
+                const dir = await window.api.getBackupDir();
+                window.api.openInExplorer(dir);
+            });
+
+            // Mode selection
+            document.querySelectorAll('.mode-option').forEach(opt => {
+                opt.addEventListener('click', () => {
+                    document.querySelectorAll('.mode-option').forEach(o => o.classList.remove('selected'));
+                    opt.classList.add('selected');
+                    selectedMode = opt.dataset.mode;
+
+                    const treeContainer = document.getElementById('fileTreeContainer');
+                    if (selectedMode === 'custom') {
+                        treeContainer.classList.add('visible');
+                        loadFileTree();
+                    } else {
+                        treeContainer.classList.remove('visible');
+                    }
+                    updateSelectedInfo();
+                });
+            });
+
+            // Backup button
+            document.getElementById('btnBackup').addEventListener('click', createBackup);
+
+            // Launch button
+            document.getElementById('btnLaunch').addEventListener('click', launchOpenClaw);
+
+            // API toggle
+            document.getElementById('apiToggle').addEventListener('click', toggleApi);
+
+            // API port change
+            document.getElementById('apiPort').addEventListener('change', async (e) => {
+                const port = parseInt(e.target.value) || 3456;
+                await saveSettings({ ...settings, apiPort: port });
+            });
+
+            // API restart
+            document.getElementById('btnApiRestart').addEventListener('click', restartApi);
+        }
+
+        function setupBackupListener() {
+            window.api.onBackupCreated((data) => {
+                showToast('API 创建备份成功: ' + data.name, 'success');
+                loadBackupList();
+            });
+        }
+
+        // ========== Actions ==========
+        async function createBackup() {
+            const btn = document.getElementById('btnBackup');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> 处理中...';
+
+            try {
+                let result;
+                if (selectedMode === 'custom') {
+                    result = await window.api.createBackup(selectedMode, Array.from(selectedFiles));
+                } else {
+                    result = await window.api.createBackup(selectedMode);
+                }
+
+                if (result.success) {
+                    showToast('备份创建成功！', 'success');
+                    await loadBackupList();
+                } else {
+                    showToast('备份失败: ' + result.error, 'error');
+                }
+            } catch (e) {
+                showToast('备份失败: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span class="btn-icon">💾</span> 创建备份';
+            }
+        }
+
+        async function restoreBackup(backupPath) {
+            try {
+                const result = await window.api.restoreBackup(backupPath);
+                if (result.success) {
+                    showToast('恢复成功！请重启 OpenClaw 生效', 'success');
+                } else if (result.error !== '用户取消') {
+                    showToast('恢复失败: ' + result.error, 'error');
+                }
+            } catch (e) {
+                showToast('恢复失败: ' + e.message, 'error');
+            }
+        }
+
+        async function deleteBackup(backupPath) {
+            try {
+                const result = await window.api.deleteBackup(backupPath);
+                if (result.success) {
+                    showToast('备份已删除', 'success');
+                    await loadBackupList();
+                } else if (result.error !== '用户取消') {
+                    showToast('删除失败: ' + result.error, 'error');
+                }
+            } catch (e) {
+                showToast('删除失败: ' + e.message, 'error');
+            }
+        }
+
+        async function launchOpenClaw() {
+            const btn = document.getElementById('btnLaunch');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> 启动中...';
+
+            try {
+                const hasCli = await window.api.checkOpenClawCLI();
+                if (!hasCli) {
+                    showToast('未找到 OpenClaw CLI，请先安装', 'error');
+                    btn.disabled = false;
+                    btn.innerHTML = '<span class="btn-icon">▶️</span> 一键启动 OpenClaw';
+                    return;
+                }
+
+                const result = await window.api.launchOpenClaw();
+                if (result.success) {
+                    showToast('OpenClaw 已在后台启动', 'success');
+                }
+            } catch (e) {
+                showToast('启动失败: ' + e.message, 'error');
+            } finally {
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = '<span class="btn-icon">▶️</span> 一键启动 OpenClaw';
+                }, 2000);
+            }
+        }
+
+        async function toggleApi() {
+            const status = await window.api.getApiStatus();
+            const port = parseInt(document.getElementById('apiPort').value) || 3456;
+
+            if (status.running) {
+                await window.api.stopApi();
+            } else {
+                await window.api.startApi(port);
+            }
+            await loadApiStatus();
+        }
+
+        async function restartApi() {
+            const port = parseInt(document.getElementById('apiPort').value) || 3456;
+            await window.api.stopApi();
+            await new Promise(r => setTimeout(r, 500));
+            await window.api.startApi(port);
+            await loadApiStatus();
+            showToast('API 服务已重启', 'success');
+        }
+
+        // ========== Toast ==========
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast ' + type;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // ========== Helpers ==========
+        function formatSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function formatDate(isoString) {
+            const d = new Date(isoString);
+            const pad = n => n.toString().padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        }
+
+        // Save custom file selection when changed
+        setInterval(async () => {
+            if (selectedMode === 'custom' && selectedFiles.size > 0) {
+                await saveSettings({ ...settings, customFiles: Array.from(selectedFiles) });
+            }
+        }, 2000);
+
+        // Start
+        init();
+    </script>
+</body>
+</html>

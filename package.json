@@ -1,0 +1,45 @@
+{
+  "name": "openclaw-backup-manager",
+  "version": "1.0.0",
+  "description": "OpenClaw Configuration Backup & Restore System",
+  "main": "main.js",
+  "author": "OpenClaw User",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win portable",
+    "build-dir": "electron-builder --win dir"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "archiver": "^7.0.1",
+    "archiver-utils": "^5.0.0",
+    "zip-stream": "^6.0.0",
+    "express": "^4.22.2",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.openclaw.backup-manager",
+    "productName": "OpenClaw-Backup-Manager",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "OpenClaw-Backup-Manager.exe"
+    },
+    "npmRebuild": true,
+    "buildDependenciesFromSource": true
+  }
+}

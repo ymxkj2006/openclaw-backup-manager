@@ -1,0 +1,5 @@
+﻿dist/
+openclaw-backup-manager/
+node_modules/
+*.zip
+*.log
